@@ -319,9 +319,8 @@ overview: () => {
     const chartData = chartKeys.map(k => AppData.financials.balance[k]);
     const maxVal = Math.max(...chartData, 1); 
     
-    // ดึงข้อมูลยอดรวมเฉพาะของ กสทช. (ดึงจากช่อง F5 ในชีตรายได้ ที่ API ส่งมา)
-    const nbtcSource = (AppData.incomeSources || []).find(src => src.name.includes('รวมรายได้ตามมาตรา 24'));
-    const nbtcTotal = nbtcSource ? nbtcSource.total : 0;
+    // ดึงข้อมูลยอดรวมรายได้ทั้งปี (รวมทุกหมวดหมู่)
+    const totalYearIncome = AppData.incomeSources.reduce((sum, src) => sum + (src.total || 0), 0);
 
     const chartHtml = chartKeys.map(k => {
       const val = AppData.financials.balance[k];
@@ -358,8 +357,8 @@ overview: () => {
           <div class="val" style="color:var(--danger)">${fmt(AppData.financials.obligations.q1)}</div>
         </div>
         <div class="stat-box">
-          <div class="lbl">รายได้จาก กสทช.</div>
-          <div class="val" style="color:var(--success)">${fmt(nbtcTotal)}</div>
+          <div class="lbl">รายได้ (ทั้งปี)</div>
+          <div class="val" style="color:var(--success)">${fmt(totalYearIncome)}</div>
         </div>
       </div>
       <div class="card">
@@ -384,6 +383,8 @@ overview: () => {
   },
   income: () => {
     let totalIncome = AppData.incomeSources.reduce((sum, src) => sum + src.total, 0);
+    
+    // การ์ด 1: แถบ Progress Bar สัดส่วนรายได้รวม
     const sourcesHtml = AppData.incomeSources.map(src => {
       const pct = totalIncome > 0 ? (src.total / totalIncome) * 100 : 0;
       return `
@@ -393,12 +394,67 @@ overview: () => {
         </div>
       `;
     }).join('');
+
+    // การ์ด 2: กราฟแท่งรายไตรมาสแยกสี (Stacked Bar Chart)
+    const quarters = ['q1', 'q2', 'q3', 'q4'];
+    
+    // คำนวณยอดรวมรายได้ของแต่ละไตรมาส
+    const qTotals = quarters.map(q => AppData.incomeSources.reduce((sum, src) => sum + (src.data[q] || 0), 0));
+    const maxQTotal = Math.max(...qTotals, 1);
+
+    const stackedChartHtml = quarters.map((q, idx) => {
+      const totalQ = qTotals[idx];
+      const label = (AppData.periods.find(p => p.id === q) || {label: q.toUpperCase()}).label;
+      const ratioToMax = totalQ / maxQTotal;
+      const barHeightPct = totalQ > 0 ? Math.max((ratioToMax * 100), 2) : 0; // ให้กราฟมีความสูงขั้นต่ำนิดหน่อยถ้ามีตัวเลข
+
+      // สร้างชั้นสี (Layers) ของแต่ละแหล่งรายได้
+      const layers = AppData.incomeSources.map(src => {
+        const val = src.data[q] || 0;
+        const pctOfThisBar = totalQ > 0 ? (val / totalQ) * 100 : 0;
+        if (val === 0) return '';
+        return `<div style="height: ${pctOfThisBar}%; width: 100%; background: ${src.color}; border-top: 1px solid rgba(255,255,255,0.15);"></div>`;
+      }).join('');
+
+      return `
+        <div class="bar-group">
+          <span class="bar-val">${totalQ > 0 ? fmt(totalQ) : '-'}</span>
+          <div class="bar-track" style="height: 120px; background: var(--track);">
+            <div style="height: ${barHeightPct}%; width: 100%; display: flex; flex-direction: column-reverse; border-radius: 8px 8px 0 0; overflow: hidden; transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1);">
+              ${layers}
+            </div>
+          </div>
+          <span class="bar-label">${label}</span>
+        </div>
+      `;
+    }).join('');
+
+    // คำอธิบายสีด้านล่างกราฟ
+    const legendHtml = AppData.incomeSources.map(src => `
+      <div style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted);">
+        <div style="width: 10px; height: 10px; border-radius: 3px; background: ${src.color};"></div>
+        ${src.name.replace(/^\(\d+\)\s*/, '')}
+      </div>
+    `).join('');
+
     return `
       <div class="card" style="background:var(--bg-app); border:none; box-shadow:none; padding:16px; margin-bottom:8px; text-align:center;">
         <div style="font-size:13px; color:var(--text-muted); margin-bottom:4px;">รายได้รวมตามมาตรา 24 (ทั้งปี)</div>
         <div style="font-size:36px; font-weight:700; color:var(--primary); line-height:1;">${fmt(totalIncome)} <span style="font-size:14px;font-weight:500;color:var(--text-muted)">ลบ.</span></div>
       </div>
-      <div class="card"><div class="section-title">สัดส่วนแหล่งรายได้</div>${sourcesHtml}</div>
+      
+      <div class="card">
+        <div class="section-title">สัดส่วนแหล่งรายได้ (สะสม)</div>
+        ${sourcesHtml}
+      </div>
+
+      <div class="card">
+        <div class="section-title">รายได้รายไตรมาส <span style="font-size:11px; font-weight:400; color:var(--text-muted)">ล้านบาท</span></div>
+        <div class="chart-container" style="height: 150px; margin-bottom: 16px;">${stackedChartHtml}</div>
+        <div style="display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;">
+          ${legendHtml}
+        </div>
+      </div>
     `;
   },
   projects: () => {
