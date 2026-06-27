@@ -12,22 +12,22 @@
 <style>
 :root {
   /* Pro Color Palette */
-  --primary: #2563eb;       /* Blue 600 */
-  --primary-light: #eff6ff; /* Blue 50 */
-  --success: #10b981;       /* Emerald 500 */
+  --primary: #2563eb;
+  --primary-light: #eff6ff;
+  --success: #10b981;
   --success-grad: linear-gradient(135deg, #34d399 0%, #10b981 100%);
-  --warning: #f59e0b;       /* Amber 500 */
+  --warning: #f59e0b;
   --warning-grad: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-  --danger: #ef4444;        /* Red 500 */
+  --danger: #ef4444;
   --danger-grad: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
   
   /* Neutral Palette */
-  --bg-app: #f8fafc;        /* Slate 50 */
+  --bg-app: #f8fafc;
   --surface: #ffffff;
-  --text-main: #0f172a;     /* Slate 900 */
-  --text-muted: #64748b;    /* Slate 500 */
-  --border: #e2e8f0;        /* Slate 200 */
-  --track: #f1f5f9;         /* Slate 100 */
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
+  --track: #f1f5f9;
   
   /* Shadows & Layout */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
@@ -102,6 +102,16 @@ header {
   color: var(--primary);
   padding: 4px 8px;
   border-radius: 12px;
+  font-weight: 500;
+}
+
+#error-banner {
+  display: none;
+  background: var(--danger);
+  color: white;
+  padding: 12px 20px;
+  font-size: 12px;
+  text-align: center;
   font-weight: 500;
 }
 
@@ -199,7 +209,6 @@ main {
 .prog-track { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; }
 .prog-fill { height: 100%; background: var(--primary); border-radius: 4px; transition: width 1s ease-out; }
 
-/* Styles สำหรับโครงการที่ถูกยกเลิก */
 .status-cancelled .l { color: var(--danger); text-decoration: line-through; }
 .status-cancelled .r { color: var(--danger); text-decoration: line-through; }
 .status-cancelled .prog-fill { background: var(--danger-grad); opacity: 0.5; }
@@ -252,6 +261,8 @@ tr.highlight td:first-child { background: var(--primary-light); }
     </div>
     <div class="header-status" id="last-update">กำลังเชื่อมต่อ...</div>
   </header>
+  
+  <div id="error-banner"></div>
 
   <main id="app-main"></main>
   <nav class="bottom-nav" id="bottom-nav"></nav>
@@ -261,11 +272,10 @@ tr.highlight td:first-child { background: var(--primary-light); }
 /** * ==============================================================
  * 1. ตั้งค่าการดึงข้อมูลจาก Google Sheets
  * ==============================================================
- * นี่คือ API URL ของคุณที่ใส่ไว้เรียบร้อยแล้ว
  */
 const GOOGLE_SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbxfS2b1gUR0-ph7iCKO0qttcCshVSXji9_kZIIYqaUGfD1KKI2ZQD5GlV4oAWsoKFf1/exec'; 
 
-// ข้อมูลสำรอง (Fallback Data) กรณีโหลดไม่ทันหรือเน็ตหลุด
+// ข้อมูลสำรอง
 let AppData = {
   config: { unit: 'ล้านบาท', lastUpdate: '10 มิ.ย. 2569' },
   periods: [
@@ -288,9 +298,6 @@ let AppData = {
   ]
 };
 
-// ==============================================================
-// 2. ลอจิกการคำนวณและแสดงผล UI
-// ==============================================================
 const fmt = (num) => (num === null || num === undefined || num === '') ? '-' : Number(num).toLocaleString('en-US');
 const getChartColorClass = (ratio) => {
   if (ratio >= 0.75) return 'fill-green';
@@ -351,69 +358,44 @@ const Views = {
       </div>
     `;
   },
-
   cashflow: () => {
     const fin = AppData.financials;
     const available = fin.available.now;
     const balance = fin.balance.now;
     const reserve = available - balance; 
-
     return `
       <div class="card">
         <div class="section-title">กระแสเงินสด (ปัจจุบัน)</div>
-        <div class="list-row">
-          <span class="list-label" style="color:var(--text-main);font-weight:500;">รวมเงินที่ใช้ได้</span>
-          <span class="list-val">${fmt(available)}</span>
-        </div>
-        <div class="list-row">
-          <span class="list-label">เงินกันสำรอง (หักลบ)</span>
-          <span class="list-val val-danger">- ${fmt(reserve > 0 ? reserve : 0)}</span>
-        </div>
-        <div class="list-row total">
-          <span class="list-label">เงินคงเหลือสุทธิ</span>
-          <span class="list-val">${fmt(balance)}</span>
-        </div>
+        <div class="list-row"><span class="list-label" style="color:var(--text-main);font-weight:500;">รวมเงินที่ใช้ได้</span><span class="list-val">${fmt(available)}</span></div>
+        <div class="list-row"><span class="list-label">เงินกันสำรอง (หักลบ)</span><span class="list-val val-danger">- ${fmt(reserve > 0 ? reserve : 0)}</span></div>
+        <div class="list-row total"><span class="list-label">เงินคงเหลือสุทธิ</span><span class="list-val">${fmt(balance)}</span></div>
       </div>
     `;
   },
-
   income: () => {
     let totalIncome = AppData.incomeSources.reduce((sum, src) => sum + src.total, 0);
-    
     const sourcesHtml = AppData.incomeSources.map(src => {
       const pct = totalIncome > 0 ? (src.total / totalIncome) * 100 : 0;
       return `
         <div class="prog-container">
-          <div class="prog-header">
-            <span class="l" style="color:${src.color}">${src.name}</span>
-            <span class="r">${fmt(src.total)}</span>
-          </div>
-          <div class="prog-track">
-            <div class="prog-fill" style="width: ${pct}%; background:${src.color}"></div>
-          </div>
+          <div class="prog-header"><span class="l" style="color:${src.color}">${src.name}</span><span class="r">${fmt(src.total)}</span></div>
+          <div class="prog-track"><div class="prog-fill" style="width: ${pct}%; background:${src.color}"></div></div>
         </div>
       `;
     }).join('');
-
     return `
       <div class="card" style="background:var(--bg-app); border:none; box-shadow:none; padding:16px; margin-bottom:8px; text-align:center;">
         <div style="font-size:13px; color:var(--text-muted); margin-bottom:4px;">รายได้รวมตามมาตรา 24 (ทั้งปี)</div>
         <div style="font-size:36px; font-weight:700; color:var(--primary); line-height:1;">${fmt(totalIncome)} <span style="font-size:14px;font-weight:500;color:var(--text-muted)">ลบ.</span></div>
       </div>
-      <div class="card">
-        <div class="section-title">สัดส่วนแหล่งรายได้</div>
-        ${sourcesHtml}
-      </div>
+      <div class="card"><div class="section-title">สัดส่วนแหล่งรายได้</div>${sourcesHtml}</div>
     `;
   },
-
   projects: () => {
     const sec3Projects = AppData.projects.filter(p => p.category === '(3)');
     const sec5Projects = AppData.projects.filter(p => p.category === '(5)');
-    
     const totalSec3 = sec3Projects.filter(p => p.status !== 'ยกเลิก').reduce((sum, p) => sum + p.budget, 0);
     const totalSec5 = sec5Projects.filter(p => p.status !== 'ยกเลิก').reduce((sum, p) => sum + p.budget, 0);
-    
     const maxBudget = Math.max(...sec3Projects.map(p => p.budget), 1);
 
     const projHtml = sec3Projects.map(p => {
@@ -421,48 +403,29 @@ const Views = {
       const pct = (p.budget / maxBudget) * 100;
       const statusClass = isCancelled ? 'status-cancelled' : '';
       const badge = isCancelled ? '<span style="font-size:9px; background:var(--danger); color:white; padding:2px 6px; border-radius:10px; margin-left:6px;">ยกเลิก</span>' : '';
-      
       return `
         <div class="prog-container ${statusClass}">
-          <div class="prog-header">
-            <span class="l">${p.name}${badge}</span>
-            <span class="r">${fmt(p.budget)}</span>
-          </div>
-          <div class="prog-track">
-            <div class="prog-fill" style="width: ${pct}%;"></div>
-          </div>
+          <div class="prog-header"><span class="l">${p.name}${badge}</span><span class="r">${fmt(p.budget)}</span></div>
+          <div class="prog-track"><div class="prog-fill" style="width: ${pct}%;"></div></div>
         </div>
       `;
     }).join('');
-
     return `
       <div class="grid-3" style="grid-template-columns: 1fr 1fr;">
-        <div class="stat-box">
-          <div class="lbl">มาตรา 26(3) คงอยู่</div>
-          <div class="val" style="color:var(--primary)">${fmt(totalSec3)}</div>
-        </div>
-        <div class="stat-box">
-          <div class="lbl">มาตรา 26(5) คงอยู่</div>
-          <div class="val" style="color:var(--success)">${fmt(totalSec5)}</div>
-        </div>
+        <div class="stat-box"><div class="lbl">มาตรา 26(3) คงอยู่</div><div class="val" style="color:var(--primary)">${fmt(totalSec3)}</div></div>
+        <div class="stat-box"><div class="lbl">มาตรา 26(5) คงอยู่</div><div class="val" style="color:var(--success)">${fmt(totalSec5)}</div></div>
       </div>
-      <div class="card">
-        <div class="section-title">รายการโครงการ ม. 26(3)</div>
-        ${projHtml}
-      </div>
+      <div class="card"><div class="section-title">รายการโครงการ ม. 26(3)</div>${projHtml}</div>
     `;
   },
-
   table: () => {
     const headKeys = ['q1', 'q2', 'q3', 'q4', 'now'];
     const headHtml = headKeys.map(k => `<th>${k === 'now' ? 'ปัจจุบัน' : k.toUpperCase()}</th>`).join('');
-    
     const renderRow = (label, dataKey, isHighlight = false) => {
       const rowData = AppData.financials[dataKey];
       const cells = headKeys.map(k => `<td>${fmt(rowData[k])}</td>`).join('');
       return `<tr class="${isHighlight ? 'highlight' : ''}"><td>${label}</td>${cells}</tr>`;
     };
-
     return `
       <div class="card" style="padding:16px 0;">
         <div class="section-title" style="padding:0 16px;">สรุปข้อมูลการเงิน (ล้านบาท)</div>
@@ -517,27 +480,23 @@ function renderPage(pageId) {
 // ==============================================================
 async function initApp() {
   const main = document.getElementById('app-main');
+  const errorBanner = document.getElementById('error-banner');
   
   if (GOOGLE_SHEET_API_URL && GOOGLE_SHEET_API_URL.trim() !== '') {
-    main.innerHTML = `
-      <div class="loader-container">
-        <div class="spinner"></div>
-        กำลังโหลดข้อมูลล่าสุด...
-      </div>`;
+    main.innerHTML = `<div class="loader-container"><div class="spinner"></div>กำลังโหลดข้อมูลล่าสุด...</div>`;
     
     try {
-      const response = await fetch(GOOGLE_SHEET_API_URL);
-      const sheetData = await response.json();
+      const response = await fetch(GOOGLE_SHEET_API_URL, { redirect: "follow" });
+      if (!response.ok) throw new Error("การเชื่อมต่อเครือข่ายล้มเหลว (HTTP " + response.status + ")");
       
-      // ตรวจสอบว่า API ส่ง Error กลับมาหรือไม่
-      if (sheetData.error) {
-        console.error("API Error:", sheetData.error);
-        throw new Error(sheetData.error);
-      }
+      const sheetData = await response.json();
+      if (sheetData.error) throw new Error(sheetData.error);
       
       AppData = sheetData;
     } catch (error) {
-      console.error("เชื่อมต่อ API ไม่สำเร็จ กำลังใช้ข้อมูลสำรอง", error);
+      console.error("API Fetch Error:", error);
+      errorBanner.style.display = 'block';
+      errorBanner.innerText = "⚠️ ดึงข้อมูลจาก Sheets ไม่สำเร็จ สาเหตุ: " + error.message + " (ตรวจสอบสิทธิ์การแชร์หรือข้อจำกัดของบัญชีองค์กร)";
     }
   }
 
