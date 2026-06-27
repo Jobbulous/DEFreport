@@ -261,11 +261,11 @@ tr.highlight td:first-child { background: var(--primary-light); }
 /** * ==============================================================
  * 1. ตั้งค่าการดึงข้อมูลจาก Google Sheets
  * ==============================================================
- * นำ URL จาก Google Apps Script (Web App) มาใส่ที่นี่
+ * นี่คือ API URL ของคุณที่ใส่ไว้เรียบร้อยแล้ว
  */
-const GOOGLE_SHEET_API_URL = ''; 
+const GOOGLE_SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbz--6tRKOxjVemTRdeMQolvTjvkDd4V8D_i9hSfaENXR81kmIBQjxH56x8kvHRo_hs/exec'; 
 
-// ข้อมูลสำรอง (Fallback Data) อิงตามโครงสร้างฐานข้อมูลล่าสุด
+// ข้อมูลสำรอง (Fallback Data) กรณีโหลดไม่ทันหรือเน็ตหลุด
 let AppData = {
   config: { unit: 'ล้านบาท', lastUpdate: '10 มิ.ย. 2569' },
   periods: [
@@ -284,14 +284,7 @@ let AppData = {
     { name: '(4) รายได้จาก กสทช.', data: { q1: 136, q2: 274, q3: 123, q4: 783 }, total: 1316, color: 'var(--success)' }
   ],
   projects: [
-    { name: 'TH-AI Passport', budget: 1650, category: '(3)', status: 'ปกติ' },
-    { name: 'GDCC · คลาวด์กลางภาครัฐ', budget: 1296, category: '(3)', status: 'ปกติ' },
-    { name: 'SaaS ภายใต้ GDCC', budget: 692, category: '(3)', status: 'ปกติ' },
-    { name: 'อินเทอร์เน็ตสาธารณะ', budget: 528, category: '(3)', status: 'ปกติ' },
-    { name: 'เพิ่มประสิทธิภาพเน็ต 1 Gbps', budget: 298, category: '(3)', status: 'ยกเลิก' },
-    { name: 'ยกระดับศูนย์ AOC', budget: 214, category: '(3)', status: 'ปกติ' },
-    { name: 'โครงการตัวอย่าง ม.26(5)', budget: 30, category: '(5)', status: 'ปกติ' },
-    { name: 'โครงการทดสอบยกเลิก ม.26(5)', budget: 21, category: '(5)', status: 'ยกเลิก' }
+    { name: 'กำลังโหลดข้อมูล...', budget: 0, category: '(3)', status: 'ปกติ' }
   ]
 };
 
@@ -310,7 +303,7 @@ const Views = {
     const curBal = AppData.financials.balance.now;
     const chartKeys = ['q1', 'q2', 'q3', 'q4'];
     const chartData = chartKeys.map(k => AppData.financials.balance[k]);
-    const maxVal = Math.max(...chartData, 1); // ป้องกันหารด้วย 0
+    const maxVal = Math.max(...chartData, 1); 
     const ytdIncome = chartKeys.reduce((sum, k) => sum + (AppData.financials.incomeTotal[k] || 0), 0);
 
     const chartHtml = chartKeys.map(k => {
@@ -363,7 +356,7 @@ const Views = {
     const fin = AppData.financials;
     const available = fin.available.now;
     const balance = fin.balance.now;
-    const reserve = available - balance; // จำลองคำนวณเงินกันสำรอง
+    const reserve = available - balance; 
 
     return `
       <div class="card">
@@ -418,7 +411,6 @@ const Views = {
     const sec3Projects = AppData.projects.filter(p => p.category === '(3)');
     const sec5Projects = AppData.projects.filter(p => p.category === '(5)');
     
-    // นับรวมเฉพาะโครงการที่ไม่ได้ถูกยกเลิก (หรือจะนับรวมทั้งหมดก็ได้ ขึ้นอยู่กับนโยบาย ในที่นี้นับเฉพาะสถานะปกติ)
     const totalSec3 = sec3Projects.filter(p => p.status !== 'ยกเลิก').reduce((sum, p) => sum + p.budget, 0);
     const totalSec5 = sec5Projects.filter(p => p.status !== 'ยกเลิก').reduce((sum, p) => sum + p.budget, 0);
     
@@ -462,7 +454,6 @@ const Views = {
   },
 
   table: () => {
-    // แสดงคอลัมน์ Q1-Q4 และ ปัจจุบัน
     const headKeys = ['q1', 'q2', 'q3', 'q4', 'now'];
     const headHtml = headKeys.map(k => `<th>${k === 'now' ? 'ปัจจุบัน' : k.toUpperCase()}</th>`).join('');
     
@@ -537,6 +528,13 @@ async function initApp() {
     try {
       const response = await fetch(GOOGLE_SHEET_API_URL);
       const sheetData = await response.json();
+      
+      // ตรวจสอบว่า API ส่ง Error กลับมาหรือไม่
+      if (sheetData.error) {
+        console.error("API Error:", sheetData.error);
+        throw new Error(sheetData.error);
+      }
+      
       AppData = sheetData;
     } catch (error) {
       console.error("เชื่อมต่อ API ไม่สำเร็จ กำลังใช้ข้อมูลสำรอง", error);
