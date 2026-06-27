@@ -204,8 +204,8 @@ main {
 
 .prog-container { margin-bottom: 16px; }
 .prog-header { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
-.prog-header .l { font-weight: 500; }
-.prog-header .r { font-weight: 600; font-variant-numeric: tabular-nums; }
+.prog-header .l { font-weight: 500; padding-right: 8px; }
+.prog-header .r { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .prog-track { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; }
 .prog-fill { height: 100%; background: var(--primary); border-radius: 4px; transition: width 1s ease-out; }
 
@@ -275,7 +275,7 @@ tr.highlight td:first-child { background: var(--primary-light); }
  */
 const GOOGLE_SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbxfS2b1gUR0-ph7iCKO0qttcCshVSXji9_kZIIYqaUGfD1KKI2ZQD5GlV4oAWsoKFf1/exec'; 
 
-// ข้อมูลสำรอง
+// ข้อมูลสำรอง (Fallback Data) ฉบับสมบูรณ์
 let AppData = {
   config: { unit: 'ล้านบาท', lastUpdate: '10 มิ.ย. 2569' },
   periods: [
@@ -294,7 +294,14 @@ let AppData = {
     { name: '(4) รายได้จาก กสทช.', data: { q1: 136, q2: 274, q3: 123, q4: 783 }, total: 1316, color: 'var(--success)' }
   ],
   projects: [
-    { name: 'กำลังโหลดข้อมูล...', budget: 0, category: '(3)', status: 'ปกติ' }
+    { name: 'TH-AI Passport', budget: 1650, category: '(3)', status: 'ปกติ' },
+    { name: 'GDCC · คลาวด์กลางภาครัฐ', budget: 1296, category: '(3)', status: 'ปกติ' },
+    { name: 'SaaS ภายใต้ GDCC', budget: 692, category: '(3)', status: 'ปกติ' },
+    { name: 'อินเทอร์เน็ตสาธารณะ', budget: 528, category: '(3)', status: 'ปกติ' },
+    { name: 'เพิ่มประสิทธิภาพเน็ต 1 Gbps', budget: 298, category: '(3)', status: 'ยกเลิก' },
+    { name: 'ยกระดับศูนย์ AOC', budget: 214, category: '(3)', status: 'ปกติ' },
+    { name: 'โครงการทุนวิจัย AI ภาครัฐ', budget: 30, category: '(5)', status: 'ปกติ' },
+    { name: 'โครงการพัฒนาระบบไอทีส่วนกลาง (เก่า)', budget: 21, category: '(5)', status: 'ยกเลิก' }
   ]
 };
 
@@ -392,30 +399,55 @@ const Views = {
     `;
   },
   projects: () => {
-    const sec3Projects = AppData.projects.filter(p => p.category === '(3)');
-    const sec5Projects = AppData.projects.filter(p => p.category === '(5)');
-    const totalSec3 = sec3Projects.filter(p => p.status !== 'ยกเลิก').reduce((sum, p) => sum + p.budget, 0);
-    const totalSec5 = sec5Projects.filter(p => p.status !== 'ยกเลิก').reduce((sum, p) => sum + p.budget, 0);
-    const maxBudget = Math.max(...sec3Projects.map(p => p.budget), 1);
+    const safeProjects = AppData.projects || [];
+    
+    // แยกโครงการตามประเภทหมวดหมู่
+    const sec3Projects = safeProjects.filter(p => p.category && p.category.includes('3'));
+    const sec5Projects = safeProjects.filter(p => p.category && p.category.includes('5'));
+    
+    // รวมยอดเงินเฉพาะโครงการที่ไม่ถูกยกเลิก
+    const totalSec3 = sec3Projects.filter(p => p.status !== 'ยกเลิก').reduce((sum, p) => sum + (Number(p.budget) || 0), 0);
+    const totalSec5 = sec5Projects.filter(p => p.status !== 'ยกเลิก').reduce((sum, p) => sum + (Number(p.budget) || 0), 0);
+    
+    // หาวงเงินสูงสุดของแต่ละกลุ่มเพื่อสร้างสัดส่วน Progress Bar ที่สวยงาม
+    const maxBudget3 = Math.max(...sec3Projects.map(p => Number(p.budget) || 0), 1);
+    const maxBudget5 = Math.max(...sec5Projects.map(p => Number(p.budget) || 0), 1);
 
-    const projHtml = sec3Projects.map(p => {
-      const isCancelled = p.status === 'ยกเลิก';
-      const pct = (p.budget / maxBudget) * 100;
-      const statusClass = isCancelled ? 'status-cancelled' : '';
-      const badge = isCancelled ? '<span style="font-size:9px; background:var(--danger); color:white; padding:2px 6px; border-radius:10px; margin-left:6px;">ยกเลิก</span>' : '';
-      return `
-        <div class="prog-container ${statusClass}">
-          <div class="prog-header"><span class="l">${p.name}${badge}</span><span class="r">${fmt(p.budget)}</span></div>
-          <div class="prog-track"><div class="prog-fill" style="width: ${pct}%;"></div></div>
-        </div>
-      `;
-    }).join('');
+    // ฟังก์ชันย่อยสำหรับปั้น HTML ของรายการโครงการ
+    const generateProjectRows = (projectList, maxBudget) => {
+      if (projectList.length === 0) {
+        return `<div style="text-align:center; color:var(--text-muted); padding: 20px 0; font-size:13px;">ไม่พบรายการโครงการย่อยในหมวดนี้</div>`;
+      }
+      return projectList.map(p => {
+        const isCancelled = p.status === 'ยกเลิก';
+        const pct = ((Number(p.budget) || 0) / maxBudget) * 100;
+        const statusClass = isCancelled ? 'status-cancelled' : '';
+        const badge = isCancelled ? '<span style="font-size:9px; background:var(--danger); color:white; padding:2px 6px; border-radius:10px; margin-left:6px;">ยกเลิก</span>' : '';
+        return `
+          <div class="prog-container ${statusClass}">
+            <div class="prog-header"><span class="l">${p.name}${badge}</span><span class="r">${fmt(p.budget)}</span></div>
+            <div class="prog-track"><div class="prog-fill" style="width: ${pct}%;"></div></div>
+          </div>
+        `;
+      }).join('');
+    };
+
+    const proj3Html = generateProjectRows(sec3Projects, maxBudget3);
+    const proj5Html = generateProjectRows(sec5Projects, maxBudget5);
+
     return `
       <div class="grid-3" style="grid-template-columns: 1fr 1fr;">
         <div class="stat-box"><div class="lbl">มาตรา 26(3) คงอยู่</div><div class="val" style="color:var(--primary)">${fmt(totalSec3)}</div></div>
         <div class="stat-box"><div class="lbl">มาตรา 26(5) คงอยู่</div><div class="val" style="color:var(--success)">${fmt(totalSec5)}</div></div>
       </div>
-      <div class="card"><div class="section-title">รายการโครงการ ม. 26(3)</div>${projHtml}</div>
+      <div class="card">
+        <div class="section-title">รายการโครงการ ม. 26(3)</div>
+        ${proj3Html}
+      </div>
+      <div class="card">
+        <div class="section-title">รายการโครงการ ม. 26(5)</div>
+        ${proj5Html}
+      </div>
     `;
   },
   table: () => {
@@ -496,7 +528,7 @@ async function initApp() {
     } catch (error) {
       console.error("API Fetch Error:", error);
       errorBanner.style.display = 'block';
-      errorBanner.innerText = "⚠️ ดึงข้อมูลจาก Sheets ไม่สำเร็จ สาเหตุ: " + error.message + " (ตรวจสอบสิทธิ์การแชร์หรือข้อจำกัดของบัญชีองค์กร)";
+      errorBanner.innerText = "⚠️ ดึงข้อมูลจาก Sheets ไม่สำเร็จ สาเหตุ: " + error.message + " (ใช้ข้อมูลสำรองชั่วคราว)";
     }
   }
 
