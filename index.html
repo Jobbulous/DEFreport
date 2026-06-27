@@ -313,12 +313,15 @@ const getChartColorClass = (ratio) => {
 };
 
 const Views = {
-  overview: () => {
+overview: () => {
     const curBal = AppData.financials.balance.now;
     const chartKeys = ['q1', 'q2', 'q3', 'q4'];
     const chartData = chartKeys.map(k => AppData.financials.balance[k]);
     const maxVal = Math.max(...chartData, 1); 
-    const ytdIncome = chartKeys.reduce((sum, k) => sum + (AppData.financials.incomeTotal[k] || 0), 0);
+    
+    // ดึงข้อมูลยอดรวมเฉพาะของ กสทช. (ดึงจากช่อง F5 ในชีตรายได้ ที่ API ส่งมา)
+    const nbtcSource = (AppData.incomeSources || []).find(src => src.name.includes('กสทช'));
+    const nbtcTotal = nbtcSource ? nbtcSource.total : 0;
 
     const chartHtml = chartKeys.map(k => {
       const val = AppData.financials.balance[k];
@@ -355,8 +358,8 @@ const Views = {
           <div class="val" style="color:var(--danger)">${fmt(AppData.financials.obligations.q1)}</div>
         </div>
         <div class="stat-box">
-          <div class="lbl">รวมรายได้ตาม ม.24</div>
-          <div class="val" style="color:var(--success)">${fmt(ytdIncome)}</div>
+          <div class="lbl">รายได้จาก กสทช.</div>
+          <div class="val" style="color:var(--success)">${fmt(nbtcTotal)}</div>
         </div>
       </div>
       <div class="card">
