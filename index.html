@@ -320,7 +320,7 @@ overview: () => {
     const maxVal = Math.max(...chartData, 1); 
     
     // ดึงข้อมูลยอดรวมเฉพาะของ กสทช. (ดึงจากช่อง F5 ในชีตรายได้ ที่ API ส่งมา)
-    const nbtcSource = (AppData.incomeSources || []).find(src => src.name.includes('กสทช'));
+    const nbtcSource = (AppData.incomeSources || []).find(src => src.name.includes('รวมรายได้ตามมาตรา 24'));
     const nbtcTotal = nbtcSource ? nbtcSource.total : 0;
 
     const chartHtml = chartKeys.map(k => {
